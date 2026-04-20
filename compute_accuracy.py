@@ -43,12 +43,18 @@ def extract_final(text):
         return None
 
 
-for name in glob.glob(path + '/*'):
+for name in sorted(glob.glob(path + '/*_result.json')):
     print('Level 1 regex' + '==' * 20)
     succ, fail = 0, 0
     with open(name, 'r') as f:
         entries = json.load(f)
+        if not isinstance(entries, list):
+            continue
         for e in entries:
+            if not isinstance(e, dict):
+                continue
+            if 'model_outputs' not in e or 'answer' not in e:
+                continue
             pred = extract_answer(e['model_outputs'], 'l1')
             if pred is None:
                 pred = random.choice(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"])
@@ -57,13 +63,19 @@ for name in glob.glob(path + '/*'):
                 succ += 1
             else:
                 fail += 1
-    print(name, succ / (succ + fail))
+    print(name, succ / (succ + fail) if (succ + fail) else 0)
 
     print('Level 2 regex' + '==' * 20)
     succ, fail = 0, 0
     with open(name, 'r') as f:
         entries = json.load(f)
+        if not isinstance(entries, list):
+            continue
         for e in entries:
+            if not isinstance(e, dict):
+                continue
+            if 'model_outputs' not in e or 'answer' not in e:
+                continue
             pred = extract_answer(e['model_outputs'], 'l2')
             if pred is None:
                 pred = random.choice(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"])
@@ -72,6 +84,6 @@ for name in glob.glob(path + '/*'):
                 succ += 1
             else:
                 fail += 1
-    print(name, succ / (succ + fail))
+    print(name, succ / (succ + fail) if (succ + fail) else 0)
     
     print()

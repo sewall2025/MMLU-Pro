@@ -1175,7 +1175,15 @@ def update_result(output_res_path):
                     res = json.load(fi)
                 for each in res:
                     cat = each["category"]
-                    category_record.setdefault(cat, {"corr": 0.0, "wrong": 0.0})
+                    category_record.setdefault(
+                        cat,
+                        {
+                            "corr": 0.0,
+                            "wrong": 0.0,
+                            "count": 0.0,
+                        },
+                    )
+                    category_record[cat]["count"] += 1
                     if not each.get("pred"):
                         category_record[cat]["wrong"] += 1
                     elif each["pred"] == each["answer"]:
@@ -1214,9 +1222,11 @@ def save_res(res, output_res_path):
 
 def save_summary(category_record, output_summary_path):
     total_corr = total_wrong = 0.0
+    total_count = 0.0
     for cat, stats in category_record.items():
         if cat == "total":
             continue
+        stats.setdefault("count", 0.0)
         acc = (
             (stats["corr"] / (stats["corr"] + stats["wrong"]))
             if (stats["corr"] + stats["wrong"]) > 0
@@ -1225,9 +1235,11 @@ def save_summary(category_record, output_summary_path):
         category_record[cat]["acc"] = acc
         total_corr += stats["corr"]
         total_wrong += stats["wrong"]
+        total_count += stats["count"]
     overall = {
         "corr": total_corr,
         "wrong": total_wrong,
+        "count": total_count,
         "acc": total_corr / (total_corr + total_wrong)
         if (total_corr + total_wrong) > 0
         else 0,
@@ -1644,6 +1656,10 @@ if __name__ == "__main__":
     except ImportError:
         pass
 
+    total_all_corr = 0
+    total_all_wrong = 0
+    total_all_elapsed = 0.0
+
     for subject in assigned_subjects:
         if GLOBAL_QUIT_REQUESTED:
             console.print("\n[red]Evaluation terminated by user[/red]")
@@ -1670,6 +1686,7 @@ if __name__ == "__main__":
 
         SCROLL_OFFSET = 0
         AUTO_SCROLL = True
+        subject_wall_start = time.time()
 
         try:
             asyncio.run(
@@ -1693,18 +1710,43 @@ if __name__ == "__main__":
             traceback.print_exc()
             continue
 
+        subject_wall_elapsed = time.time() - subject_wall_start
+
         summary_path = os.path.join(args.output_dir, f"{subject}_summary.json")
         if os.path.exists(summary_path):
             try:
                 with open(summary_path, "r") as f:
                     summary = json.load(f)
                     if "total" in summary:
+                        summary["total"]["total_elapsed_seconds"] = round(
+                            subject_wall_elapsed, 3
+                        )
+                        with open(summary_path, "w") as wf:
+                            wf.write(json.dumps(summary))
+
                         acc = summary["total"]["acc"] * 100
                         corr = int(summary["total"]["corr"])
                         wrong = int(summary["total"]["wrong"])
+                        elapsed = float(summary["total"].get("total_elapsed_seconds", 0.0))
+                        total_all_corr += corr
+                        total_all_wrong += wrong
+                        total_all_elapsed += elapsed
                         console.print(
                             f"\n  [bold]Final Accuracy for {subject}: "
                             f"{acc:.2f}% ({corr}/{corr + wrong})[/bold]"
                         )
+                        console.print(
+                            f"  [dim]Elapsed: total {elapsed:.1f}s[/dim]"
+                        )
             except Exception:
                 pass
+
+    if total_all_corr + total_all_wrong > 0:
+        overall_acc = total_all_corr / (total_all_corr + total_all_wrong) * 100
+        console.print(
+            f"\n[bold green]Overall Accuracy (All Subjects): "
+            f"{overall_acc:.2f}% ({total_all_corr}/{total_all_corr + total_all_wrong})[/bold green]"
+        )
+        console.print(
+            f"[bold cyan]Overall Elapsed: total {total_all_elapsed:.1f}s[/bold cyan]"
+        )
